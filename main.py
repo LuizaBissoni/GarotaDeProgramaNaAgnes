@@ -1,20 +1,14 @@
 import os
 import pandas as pd
-import psycopg2
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from config import *
+from config import CNPJS, DATA_INICIO, DATA_FIM, LIMITE_LINHAS
+from database import conectar
 
 print("Iniciando extração...")
 
-conn = psycopg2.connect(
-    host=DB_HOST,
-    port=DB_PORT,
-    database=DB_NAME,
-    user=DB_USER,
-    password=DB_PASSWORD
-)
+conn = conectar()
 
 queries_path = "queries"
 
@@ -30,7 +24,6 @@ def gerar_periodos(inicio, fim):
     data_fim = datetime.strptime(fim, "%Y-%m")
 
     periodos = []
-
     atual = data_inicio
 
     while atual <= data_fim:
@@ -58,6 +51,7 @@ def salvar_excel(df, evento, inicio, fim, parte=None):
 
     with pd.ExcelWriter(caminho, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False)
+
         worksheet = writer.sheets["Sheet1"]
         worksheet.set_column(0, len(df.columns), 20)
 
@@ -79,7 +73,6 @@ for cnpj in CNPJS:
             continue
 
         evento = sql_file.replace(".sql", "")
-
         caminho_sql = os.path.join(queries_path, sql_file)
 
         with open(caminho_sql, "r", encoding="utf-8") as f:
@@ -95,6 +88,7 @@ for cnpj in CNPJS:
 
             try:
                 df = pd.read_sql(query, conn)
+
             except Exception as e:
                 print("Erro na query:", e)
                 continue
@@ -126,5 +120,7 @@ for cnpj in CNPJS:
 
                 salvar_excel(df, evento, inicio, fim)
 
+
+conn.close()
 
 print("\nExtração concluída.")
