@@ -13,7 +13,7 @@ conn = conectar()
 queries_path = "queries"
 
 data_hoje = datetime.now().strftime("%d-%m-%Y")
-output_path = f"Amapá Atualizado {data_hoje}"
+output_path = os.path.join("output", f"Amapá Atualizado {data_hoje}")
 
 os.makedirs(output_path, exist_ok=True)
 
