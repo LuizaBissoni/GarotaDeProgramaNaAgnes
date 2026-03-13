@@ -108,5 +108,6 @@ ON l.id = m.id_evtremun_ideestablot_infoperant
 LEFT JOIN evt_exclusao ee
 ON ee.nrrec_evt_infoexclusao = a.nr_recibo_entrega
 
-WHERE LEFT(a.nrinsc_ideempregador,8) = '{cnpj}'
+WHERE a.nrinsc_ideempregador in ({cnpjs})
+AND ee.nrrec_evt_infoexclusao IS NULL
 AND a.perapur_ideevento BETWEEN '{data_inicio}' AND '{data_fim}'

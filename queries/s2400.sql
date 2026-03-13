@@ -44,5 +44,5 @@ FROM evt_cd_benef_in a
 LEFT JOIN evt_cd_benef_in_dependente_beneficiario b
 ON a.id = b.id_evt_cd_benef_in
 
-WHERE LEFT(a.nrinsc_ideempregador,8) = '{cnpj}'
-AND a.perapur_ideevento BETWEEN '{data_inicio}' AND '{data_fim}'
+WHERE a.nrinsc_ideempregador in ({cnpjs})
+-- AND ee.nrrec_evt_infoexclusao IS NULL

@@ -1,126 +1,102 @@
-import os
 import pandas as pd
+import psycopg2
+import os
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
-
-from config import CNPJS, DATA_INICIO, DATA_FIM, LIMITE_LINHAS
-from database import conectar
+from config import DB_CONFIG, CNPJS, DATA_INICIO, DATA_FIM, LIMITE_LINHAS
 
 print("Iniciando extração...")
 
-conn = conectar()
+conn = psycopg2.connect(
+    host=DB_CONFIG["host"],
+    database=DB_CONFIG["database"],
+    user=DB_CONFIG["user"],
+    password=DB_CONFIG["password"],
+    port=DB_CONFIG["port"]
+)
 
-queries_path = "queries"
-
-data_hoje = datetime.now().strftime("%d-%m-%Y")
-output_path = os.path.join("output", f"Amapá Atualizado {data_hoje}")
-
-os.makedirs(output_path, exist_ok=True)
-
-
-def gerar_periodos(inicio, fim):
-
-    data_inicio = datetime.strptime(inicio, "%Y-%m")
-    data_fim = datetime.strptime(fim, "%Y-%m")
-
-    periodos = []
-    atual = data_inicio
-
-    while atual <= data_fim:
-
-        proximo = atual + relativedelta(months=6)
-
-        if proximo > data_fim:
-            proximo = data_fim
-
-        periodos.append((atual.strftime("%Y-%m"), proximo.strftime("%Y-%m")))
-
-        atual = proximo + relativedelta(months=1)
-
-    return periodos
+cnpjs_sql = ",".join([f"'{c}'" for c in CNPJS])
 
 
-def salvar_excel(df, evento, inicio, fim, parte=None):
+def dividir_periodo(inicio, fim):
+    """divide período no meio sem repetir mês"""
 
-    if parte:
-        nome = f"{evento.upper()} Amapá Unificado per_apur {inicio} a {fim}_parte{parte}.xlsx"
+    inicio_dt = datetime.strptime(inicio, "%Y-%m")
+    fim_dt = datetime.strptime(fim, "%Y-%m")
+
+    meio = inicio_dt + (fim_dt - inicio_dt) / 2
+    meio = meio.replace(day=1)
+
+    meio_str = meio.strftime("%Y-%m")
+
+    # calcula próximo mês para evitar duplicação
+    if meio.month == 12:
+        proximo_mes = meio.replace(year=meio.year + 1, month=1)
     else:
-        nome = f"{evento.upper()} Amapá Unificado per_apur {inicio} a {fim}.xlsx"
+        proximo_mes = meio.replace(month=meio.month + 1)
 
-    caminho = os.path.join(output_path, nome)
+    proximo_mes_str = proximo_mes.strftime("%Y-%m")
 
-    with pd.ExcelWriter(caminho, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False)
-
-        worksheet = writer.sheets["Sheet1"]
-        worksheet.set_column(0, len(df.columns), 20)
-
-    print("Arquivo salvo:", nome)
+    return (inicio, meio_str), (proximo_mes_str, fim)
 
 
-periodos = gerar_periodos(DATA_INICIO, DATA_FIM)
+for arquivo_sql in os.listdir("queries"):
 
+    if not arquivo_sql.endswith(".sql"):
+        continue
 
-for cnpj in CNPJS:
+    evento = arquivo_sql.replace(".sql", "").upper()
 
-    print("\n=================================")
-    print("Extraindo CNPJ raiz:", cnpj)
-    print("=================================")
+    print("\n==============================")
+    print("Evento:", evento)
+    print("==============================")
 
-    for sql_file in os.listdir(queries_path):
+    with open(f"queries/{arquivo_sql}", "r", encoding="utf-8") as f:
+        query_base = f.read()
 
-        if not sql_file.endswith(".sql"):
+    query_base = query_base.replace("{cnpjs}", cnpjs_sql)
+
+    periodos = [(DATA_INICIO, DATA_FIM)]
+
+    while periodos:
+
+        inicio, fim = periodos.pop(0)
+
+        print(f"\nConsultando período {inicio} até {fim}")
+
+        query = query_base.replace("{data_inicio}", inicio).replace("{data_fim}", fim)
+
+        try:
+            df = pd.read_sql(query, conn)
+        except Exception as e:
+            print("Erro na query:", e)
+            break
+
+        total = len(df)
+
+        if total == 0:
+            print("Sem dados.")
             continue
 
-        evento = sql_file.replace(".sql", "")
-        caminho_sql = os.path.join(queries_path, sql_file)
+        print("Registros encontrados:", total)
 
-        with open(caminho_sql, "r", encoding="utf-8") as f:
-            query_base = f.read()
+        if total > LIMITE_LINHAS:
 
-        for inicio, fim in periodos:
+            print("Acima do limite, dividindo período...")
 
-            print(f"Evento {evento.upper()} | {inicio} até {fim}")
+            p1, p2 = dividir_periodo(inicio, fim)
 
-            query = query_base.replace("{cnpj}", cnpj)
-            query = query.replace("{data_inicio}", inicio)
-            query = query.replace("{data_fim}", fim)
+            periodos.insert(0, p2)
+            periodos.insert(0, p1)
 
-            try:
-                df = pd.read_sql(query, conn)
+            continue
 
-            except Exception as e:
-                print("Erro na query:", e)
-                continue
+        if inicio == DATA_INICIO and fim == DATA_FIM:
+            nome = f"{evento} amapa unificado.xlsx"
+        else:
+            nome = f"{evento} amapa unificado - per_apur ({inicio} a {fim}).xlsx"
 
-            if df.empty:
-                print("Sem dados.")
-                continue
+        df.to_excel(nome, index=False)
 
-            total = len(df)
-
-            print(total, "registros encontrados.")
-
-            if total > LIMITE_LINHAS:
-
-                print("Parse automático ativado")
-
-                partes = (total // LIMITE_LINHAS) + 1
-
-                for i in range(partes):
-
-                    inicio_linha = i * LIMITE_LINHAS
-                    fim_linha = (i + 1) * LIMITE_LINHAS
-
-                    df_parte = df.iloc[inicio_linha:fim_linha]
-
-                    salvar_excel(df_parte, evento, inicio, fim, i + 1)
-
-            else:
-
-                salvar_excel(df, evento, inicio, fim)
-
-
-conn.close()
+        print("Arquivo salvo:", nome)
 
 print("\nExtração concluída.")

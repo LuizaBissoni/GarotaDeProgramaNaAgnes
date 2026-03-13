@@ -52,5 +52,6 @@ left join evt_rmnrppside_periodo_info_per_ant f on b.id = f.id_evtrmnrpps_dmdev
 left join evt_rmnrpps_evt_rmnrpps_dmdev_inforra_ideadv g on b.id = g.id_evtrmnrpps_dmdev
 left join evt_exclusao ee on ee.nrrec_evt_infoexclusao = a.nr_recibo_entrega
 
-WHERE LEFT(a.nrinsc_ideempregador,8) = '{cnpj}'
+WHERE a.nrinsc_ideempregador in ({cnpjs})
+AND ee.nrrec_evt_infoexclusao IS NULL
 AND a.perapur_ideevento BETWEEN '{data_inicio}' AND '{data_fim}'

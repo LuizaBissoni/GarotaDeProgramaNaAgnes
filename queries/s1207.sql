@@ -44,5 +44,5 @@ ON a.id = d.id_evtbenprrp_dmdev
 LEFT JOIN evt_ben_prrpitens_remun_ide_estab_infoperapur e
 ON a.id = e.id_evtbenprrp_ideestab_infoperapur
 
-WHERE LEFT(a.nrinsc_ideempregador,8) = '{cnpj}'
-AND a.perapur_ideevento BETWEEN '{data_inicio}' AND '{data_fim}'
+WHERE a.nrinsc_ideempregador in ({cnpjs})
+-- AND ee.nrrec_evt_infoexclusao IS NULL
