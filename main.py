@@ -28,7 +28,6 @@ def dividir_periodo(inicio, fim):
 
     meio_str = meio.strftime("%Y-%m")
 
-    # calcula próximo mês para evitar duplicação
     if meio.month == 12:
         proximo_mes = meio.replace(year=meio.year + 1, month=1)
     else:
@@ -65,13 +64,20 @@ for arquivo_sql in os.listdir("queries"):
 
         query = query_base.replace("{data_inicio}", inicio).replace("{data_fim}", fim)
 
-        try:
-            df = pd.read_sql(query, conn)
-        except Exception as e:
-            print("Erro na query:", e)
-            break
+        # -------- NOVA PARTE (COUNT) --------
+        query_count = f"""
+        SELECT COUNT(*) 
+        FROM (
+        {query}
+        ) q
+        """
 
-        total = len(df)
+        try:
+            total = pd.read_sql(query_count, conn).iloc[0, 0]
+        except Exception as e:
+            print("Erro ao contar registros:", e)
+            break
+        # ------------------------------------
 
         if total == 0:
             print("Sem dados.")
@@ -89,6 +95,14 @@ for arquivo_sql in os.listdir("queries"):
             periodos.insert(0, p1)
 
             continue
+
+        # -------- CONSULTA REAL SÓ AQUI --------
+        try:
+            df = pd.read_sql(query, conn)
+        except Exception as e:
+            print("Erro na query:", e)
+            break
+        # ---------------------------------------
 
         if inicio == DATA_INICIO and fim == DATA_FIM:
             nome = f"{evento} amapa unificado.xlsx"
